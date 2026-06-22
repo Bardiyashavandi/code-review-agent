@@ -18,18 +18,18 @@ Static analyzers find patterns but can't explain why they matter. LLMs can expla
                     └────────┬─────────┘
                              │ Python files
                              ▼
-                    ┌─────────────────┐
+                    ┌──────────────────
                     │  semgrep_runner  │── sandboxed subprocess
                     └────────┬─────────┘
                              │ files + findings
                              ▼
-                    ┌─────────────────┐
+                    ┌──────────────────
                     │  gemini_reviewer │── Gemini 2.5 Flash
                     └────────┬─────────┘
                              │ structured issues
                              ▼
                     ┌─────────────────┐
-                    │ report_generator │── review_report.md
+                    │ report_generator│── review_report.md
                     └─────────────────┘
 
    agent.py orchestrates the above AND exposes it as a
