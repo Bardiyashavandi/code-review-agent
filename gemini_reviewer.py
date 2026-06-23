@@ -80,7 +80,7 @@ class ReviewReport:
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
 DEFAULT_MAX_FILES_PER_BATCH = 10
 DEFAULT_MAX_CHARS_PER_BATCH = 60_000
 MAX_RETRIES = 3

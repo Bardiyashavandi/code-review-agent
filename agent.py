@@ -75,7 +75,7 @@ class PipelineResult:
 
 DEFAULT_BRANCH = "main"
 DEFAULT_MAX_FILES = 100
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
 DEFAULT_SEMGREP_CONFIG = "auto"
 
 

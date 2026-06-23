@@ -32,7 +32,7 @@ Kaggle 5-Day AI Agents Capstone — track: **Agents for Business**
 
 ## The idea
 
-Static analyzers find patterns but can't explain why they matter. LLMs can explain things but hallucinate when given no real grounding. This agent closes that gap: it fetches your actual repository, runs real Semgrep static analysis on it, and hands both the code and the findings to Gemini 2.5 Flash — so every issue in the final report is backed by either a deterministic rule or a model that's actually looking at your code, never a guess.
+Static analyzers find patterns but can't explain why they matter. LLMs can explain things but hallucinate when given no real grounding. This agent closes that gap: it fetches your actual repository, runs real Semgrep static analysis on it, and hands both the code and the findings to Gemini 3.1 Flash Lite — so every issue in the final report is backed by either a deterministic rule or a model that's actually looking at your code, never a guess.
 
 Only a fetch failure is treated as fatal — there's nothing to review without files. A Semgrep or Gemini hiccup is captured as a non-fatal `StageError` instead, so the pipeline always returns a usable result, degraded but never empty-handed. This isn't theoretical: during real testing, Gemini intermittently threw transient `503` errors under load, and the retry logic kept the run going without dropping it.
 
@@ -50,7 +50,7 @@ Only a fetch failure is treated as fatal — there's nothing to review without f
                                   │ files + findings
                                   ▼
                        ┌────────────────────┐
-                       │   gemini_reviewer  │── Gemini 2.5 Flash
+                       │   gemini_reviewer  │── Gemini 3.1 Flash Lite
                        └──────────┬─────────┘
                                   │ structured issues
                                   ▼
@@ -67,7 +67,7 @@ Only a fetch failure is treated as fatal — there's nothing to review without f
 |---|---|---|
 | 1. Fetch | `github_fetcher.py` | Walks the repo tree via the GitHub API, pulls every Python file, skips venvs/build noise |
 | 2. Scan | `semgrep_runner.py` | Writes files into an isolated sandbox, runs Semgrep, parses JSON into typed findings |
-| 3. Review | `gemini_reviewer.py` | Batches code + findings into prompts, asks Gemini 2.5 Flash for a structured, severity-ranked review |
+| 3. Review | `gemini_reviewer.py` | Batches code + findings into prompts, asks Gemini 3.1 Flash Lite for a structured, severity-ranked review |
 
 ## What a run actually looks like
 
@@ -165,7 +165,7 @@ pytest -v
 
 ## Real-world verification, not just mocks
 
-A real end-to-end run (not a test fixture) fetched 25 files, ran a live Semgrep scan, called Gemini 2.5 Flash, and produced a 23-issue report in 96 seconds with genuine findings — a Flask app left in debug mode, a hardcoded mock API key, an endpoint trusting a client-supplied ID. That run also surfaced three real integration bugs no mock could have caught, all now fixed and covered by regression tests:
+A real end-to-end run (not a test fixture) fetched 25 files, ran a live Semgrep scan, called Gemini 3.1 Flash Lite, and produced a 23-issue report in 96 seconds with genuine findings — a Flask app left in debug mode, a hardcoded mock API key, an endpoint trusting a client-supplied ID. That run also surfaced three real integration bugs no mock could have caught, all now fixed and covered by regression tests:
 
 1. **Dependency conflict** — `google-adk` and `semgrep` pin incompatible `opentelemetry` ranges. Fixed by isolating Semgrep into its own `pipx` environment.
 2. **Stale shell env var** — `python-dotenv` never overrides an already-exported variable, so an old `GEMINI_API_KEY` from a previous test silently beat the correct `.env` value.

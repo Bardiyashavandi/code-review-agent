@@ -17,7 +17,7 @@ It works in three grounded stages, each implemented and tested as an independent
 
 1. **Fetch.** `github_fetcher.py` walks the repository's file tree through the GitHub API and pulls down every Python source file, skipping virtual environments, build artifacts, and other noise that would waste review budget.
 2. **Scan.** `semgrep_runner.py` writes those files into an isolated temporary sandbox and runs Semgrep against them, parsing the JSON output into typed findings — deterministic ground truth about specific, known vulnerability patterns.
-3. **Review.** `gemini_reviewer.py` batches the source files together with the Semgrep findings that apply to them and asks Gemini 2.5 Flash for a structured review: each issue gets a severity, a one-line title, an explanation, and a concrete suggested fix — grounded in both the actual code and the static analysis results, not a generic LLM guess.
+3. **Review.** `gemini_reviewer.py` batches the source files together with the Semgrep findings that apply to them and asks Gemini 3.1 Flash Lite for a structured review: each issue gets a severity, a one-line title, an explanation, and a concrete suggested fix — grounded in both the actual code and the static analysis results, not a generic LLM guess.
 
 `agent.py` orchestrates all three stages behind a single `CodeReviewAgent.review_repo()` call, and `report_generator.py` renders the result into a clean Markdown report with issues sorted by severity. `main.py` is the CLI entry point a developer or CI pipeline would actually run.
 
@@ -37,7 +37,7 @@ Critically, the pipeline is built so a fetch failure is the only fatal failure �
                              │ files + findings
                              ▼
                     ┌─────────────────┐
-                    │  gemini_reviewer │── Gemini 2.5 Flash
+                    │  gemini_reviewer │── Gemini 3.1 Flash Lite
                     └────────┬─────────┘
                              │ structured issues
                              ▼
@@ -72,7 +72,7 @@ Two of the six required concepts (ADK and Security) are demonstrated thoroughly 
 
 A capstone project that only ever sees mocked inputs proves the code parses correctly, not that it works. So beyond the 83-test mocked suite (covering batching logic, severity sorting, error handling, and the security cases above — all running in about a second with no network access or credentials), this project was run end-to-end against a real, unmodified GitHub repository with real credentials, real network calls, and real LLM output.
 
-That real run fetched 25 Python files, ran a live Semgrep scan, sent the results to Gemini 2.5 Flash, and produced a 23-issue report in 96 seconds — including genuine critical findings like a Flask app left in debug mode, a hardcoded mock API key, and an endpoint trusting a client-supplied user ID without verification. These aren't synthetic test fixtures; they're real code smells in a real codebase, found by the actual pipeline doing its actual job.
+That real run fetched 25 Python files, ran a live Semgrep scan, sent the results to Gemini 3.1 Flash Lite, and produced a 23-issue report in 96 seconds — including genuine critical findings like a Flask app left in debug mode, a hardcoded mock API key, and an endpoint trusting a client-supplied user ID without verification. These aren't synthetic test fixtures; they're real code smells in a real codebase, found by the actual pipeline doing its actual job.
 
 That real run also surfaced three genuine integration bugs that the mocked test suite, by construction, could never have caught:
 
@@ -88,7 +88,7 @@ Every module — `github_fetcher`, `semgrep_runner`, `gemini_reviewer`, `agent`,
 
 ## Tech stack
 
-Python, Google ADK 2.0 (`google-adk`), Gemini 2.5 Flash via `google-genai`, the GitHub REST API, and Semgrep for static analysis. No paid services are used anywhere in the pipeline — Semgrep's `--config auto` ruleset and the Gemini and GitHub APIs are all usable on free tiers, which was a hard constraint from the start of the project rather than an afterthought.
+Python, Google ADK 2.0 (`google-adk`), Gemini 3.1 Flash Lite via `google-genai`, the GitHub REST API, and Semgrep for static analysis. No paid services are used anywhere in the pipeline — Semgrep's `--config auto` ruleset and the Gemini and GitHub APIs are all usable on free tiers, which was a hard constraint from the start of the project rather than an afterthought.
 
 ## Setup
 

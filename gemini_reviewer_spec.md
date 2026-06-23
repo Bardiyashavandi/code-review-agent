@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-Send fetched source files plus their Semgrep findings to Gemini 2.5 Flash and get back a structured, prioritized list of code review issues with fix suggestions. This is the synthesis step of the pipeline: `github_fetcher` provides the "what", `semgrep_runner` provides the "known issues", and this module asks the model to reason over both and produce the human-facing review.
+Send fetched source files plus their Semgrep findings to Gemini 3.1 Flash Lite and get back a structured, prioritized list of code review issues with fix suggestions. This is the synthesis step of the pipeline: `github_fetcher` provides the "what", `semgrep_runner` provides the "known issues", and this module asks the model to reason over both and produce the human-facing review.
 
 ---
 
@@ -43,7 +43,7 @@ review = reviewer.review(files, scan_report)
 |--------------|---------------------|------------------------------------------------|
 | `issues`     | `list[ReviewIssue]` | All issues, sorted by severity (Critical→Low)  |
 | `summary`    | `str`               | Short model-generated overview of the repo scan |
-| `model`      | `str`               | Model id used, e.g. `"gemini-2.5-flash"`        |
+| `model`      | `str`               | Model id used, e.g. `"gemini-3.1-flash-lite"`        |
 | `files_reviewed` | `int`           | Count of files actually sent to the model        |
 | `duration_s` | `float`             | Wall-clock time for the review call(s)           |
 
@@ -51,7 +51,7 @@ review = reviewer.review(files, scan_report)
 
 | Method | Signature | Returns | Description |
 |--------|-----------|---------|--------------|
-| `__init__` | `(api_key: str, model: str = "gemini-2.5-flash", max_files_per_batch: int = 10, max_chars_per_batch: int = 60_000)` | — | Validates `api_key` non-empty; stores config; never logs the key |
+| `__init__` | `(api_key: str, model: str = "gemini-3.1-flash-lite", max_files_per_batch: int = 10, max_chars_per_batch: int = 60_000)` | — | Validates `api_key` non-empty; stores config; never logs the key |
 | `review` | `(files: list[FileResult], scan_report: ScanReport) → ReviewReport` | `ReviewReport` | Batches files, builds prompts, calls Gemini, parses + merges results |
 
 ---
@@ -111,7 +111,7 @@ All errors include `.message`; `GeminiAPIError` additionally includes `.http_sta
 | Parameter              | Default              | Description                                  |
 |-------------------------|----------------------|------------------------------------------------|
 | `api_key`               | required             | Gemini API key (free tier)                      |
-| `model`                 | `"gemini-2.5-flash"` | Model id                                          |
+| `model`                 | `"gemini-3.1-flash-lite"` | Model id                                          |
 | `max_files_per_batch`   | `10`                 | Max files sent in a single request                |
 | `max_chars_per_batch`   | `60_000`             | Max total source chars per request                |
 

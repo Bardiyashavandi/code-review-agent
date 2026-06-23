@@ -34,7 +34,7 @@ Verified demo repo: `https://github.com/anxolerd/dvpwa` (branch `master`) — al
 
 **Say:**
 
-"Three stages, each its own tested module. `github_fetcher` pulls every Python file from the repo via the GitHub API. `semgrep_runner` writes those into an isolated sandbox and runs Semgrep — that's the deterministic, ground-truth half. `gemini_reviewer` takes the source plus the Semgrep findings and asks Gemini 2.5 Flash for a structured, severity-ranked review — that's the judgment half. `agent.py` wires all three together and also exposes the same pipeline as a Google ADK agent tool."
+"Three stages, each its own tested module. `github_fetcher` pulls every Python file from the repo via the GitHub API. `semgrep_runner` writes those into an isolated sandbox and runs Semgrep — that's the deterministic, ground-truth half. `gemini_reviewer` takes the source plus the Semgrep findings and asks Gemini 3.1 Flash Lite for a structured, severity-ranked review — that's the judgment half. `agent.py` wires all three together and also exposes the same pipeline as a Google ADK agent tool."
 
 "Only a fetch failure is fatal — there's nothing to review without files. If Semgrep or Gemini has a bad moment, the pipeline degrades gracefully instead of crashing. You'll actually see that happen in a second — Gemini occasionally throws a transient 503 under load, and the agent retries automatically."
 
