@@ -8,3 +8,4 @@ __pycache__/
 .pytest_cache/
 .git_broken_*/
 review_report.md
+test_report.md
