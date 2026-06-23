@@ -28,8 +28,8 @@ from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 
 from gemini_reviewer import GeminiReviewer, GeminiReviewerError, ReviewReport
-from github_fetcher import FetchResult, GitHubFetcher
-from semgrep_runner import ScanReport, SemgrepRunner, SemgrepRunnerError
+from github_fetcher import FetchResult, FileResult, GitHubFetcher
+from semgrep_runner import Finding, ScanReport, SemgrepRunner, SemgrepRunnerError
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +165,31 @@ class CodeReviewAgent:
             duration_s=duration,
         )
 
+    # --- Granular, single-stage entry points -----------------------------
+    # These exist so the ADK agent can be given separate fetch/scan/review
+    # tools instead of only the one-shot review_repo() pipeline, letting the
+    # model itself plan and sequence multi-step tool calls. They delegate to
+    # the exact same underlying clients as review_repo() — no new behavior,
+    # just exposed individually.
+
+    def fetch_files(
+        self,
+        url: str,
+        branch: str = DEFAULT_BRANCH,
+        max_files: int = DEFAULT_MAX_FILES,
+    ) -> FetchResult:
+        """Fetch a repo's Python files only — no scan, no review."""
+        return self._fetcher.fetch_python_files(url, branch=branch, max_files=max_files)
+
+    def scan_files(self, files: list[FileResult]) -> ScanReport:
+        """Run Semgrep on an already-fetched list of files only."""
+        return self._semgrep.scan(files)
+
+    def generate_review(self, files: list[FileResult], scan_report: ScanReport) -> ReviewReport:
+        """Ask Gemini to review an already-fetched list of files, optionally
+        grounded by an already-computed ScanReport — no fetch, no scan."""
+        return self._reviewer.review(files, scan_report)
+
 
 # ---------------------------------------------------------------------------
 # ADK tool wrapper
@@ -222,19 +247,146 @@ def make_review_repo_tool(agent: CodeReviewAgent) -> Callable[..., dict]:
     return review_repo_tool
 
 
+def make_fetch_repo_files_tool(agent: CodeReviewAgent) -> Callable[..., dict]:
+    """Build a standalone 'fetch only' ADK tool bound to a CodeReviewAgent instance."""
+
+    def fetch_repo_files_tool(
+        repo_url: str, branch: str = DEFAULT_BRANCH, max_files: int = DEFAULT_MAX_FILES
+    ) -> dict:
+        """Fetch a GitHub repository's Python files (path + content) without
+        scanning or reviewing them. Use this when the user only wants to see
+        what files exist, or as the first step of a multi-step review."""
+        if not isinstance(repo_url, str) or not repo_url.strip():
+            raise ValueError("repo_url must be a non-empty string")
+
+        result = agent.fetch_files(repo_url, branch=branch, max_files=max_files)
+        return {
+            "repo_url": repo_url,
+            "files": [{"path": f.path, "content": f.content} for f in result.files],
+            "files_count": len(result.files),
+            "truncated": result.truncated,
+        }
+
+    return fetch_repo_files_tool
+
+
+def make_scan_code_tool(agent: CodeReviewAgent) -> Callable[..., dict]:
+    """Build a standalone 'scan only' ADK tool bound to a CodeReviewAgent instance."""
+
+    def scan_code_tool(files: list[dict]) -> dict:
+        """Run Semgrep static analysis on a list of files, each given as
+        {"path": ..., "content": ...}. Use this on files already fetched by
+        fetch_repo_files_tool when the user wants static-analysis findings
+        on their own, without an LLM review."""
+        if not isinstance(files, list) or not files:
+            raise ValueError("files must be a non-empty list of {path, content} objects")
+
+        file_results = [
+            FileResult(path=f["path"], content=f.get("content", ""), sha="", size=len(f.get("content", "")), url="")
+            for f in files
+        ]
+        scan_report = agent.scan_files(file_results)
+        return {
+            "findings": [
+                {
+                    "path": finding.path,
+                    "line_start": finding.line_start,
+                    "line_end": finding.line_end,
+                    "rule_id": finding.rule_id,
+                    "severity": finding.severity,
+                    "message": finding.message,
+                    "snippet": finding.snippet,
+                }
+                for finding in scan_report.findings
+            ],
+            "scanned": scan_report.scanned,
+            "skipped": list(scan_report.skipped),
+        }
+
+    return scan_code_tool
+
+
+def make_generate_review_tool(agent: CodeReviewAgent) -> Callable[..., dict]:
+    """Build a standalone 'review only' ADK tool bound to a CodeReviewAgent instance."""
+
+    def generate_review_tool(files: list[dict], findings: list[dict] | None = None) -> dict:
+        """Ask Gemini to produce a structured, severity-ranked code review for
+        a list of files, each given as {"path": ..., "content": ...}, optionally
+        grounded by Semgrep findings (each {"path", "line_start", "line_end",
+        "rule_id", "severity", "message", "snippet"}) from scan_code_tool.
+        Use this when files and/or findings were already gathered by the
+        other tools and only the review step is still needed."""
+        if not isinstance(files, list) or not files:
+            raise ValueError("files must be a non-empty list of {path, content} objects")
+
+        file_results = [
+            FileResult(path=f["path"], content=f.get("content", ""), sha="", size=len(f.get("content", "")), url="")
+            for f in files
+        ]
+        finding_objs = [
+            Finding(
+                path=finding["path"],
+                line_start=finding.get("line_start", 0),
+                line_end=finding.get("line_end", 0),
+                rule_id=finding.get("rule_id", ""),
+                severity=finding.get("severity", "MEDIUM"),
+                message=finding.get("message", ""),
+                snippet=finding.get("snippet", ""),
+            )
+            for finding in (findings or [])
+        ]
+        scan_report = ScanReport(findings=finding_objs, scanned=len(file_results), skipped=[], duration_s=0.0)
+
+        review_report = agent.generate_review(file_results, scan_report)
+        return {
+            "issues": [
+                {
+                    "path": issue.path,
+                    "line": issue.line,
+                    "severity": issue.severity,
+                    "title": issue.title,
+                    "description": issue.description,
+                    "suggested_fix": issue.suggested_fix,
+                    "rule_id": issue.rule_id,
+                }
+                for issue in review_report.issues
+            ],
+            "summary": review_report.summary,
+            "model": review_report.model,
+        }
+
+    return generate_review_tool
+
+
 def build_adk_agent(
     github_token: str,
     gemini_api_key: str,
     semgrep_config: str = DEFAULT_SEMGREP_CONFIG,
 ) -> Agent:
-    """Construct the Google ADK Agent definition wrapping the review pipeline."""
+    """Construct the Google ADK Agent definition wrapping the review pipeline.
+
+    Exposes both a one-shot tool (review_repo_tool) and three granular
+    single-stage tools (fetch_repo_files_tool, scan_code_tool,
+    generate_review_tool), so the model can either run the whole pipeline
+    in one call or plan and sequence the individual steps itself.
+    """
     code_review_agent = CodeReviewAgent(
         github_token=github_token,
         gemini_api_key=gemini_api_key,
         semgrep_config=semgrep_config,
     )
-    tool_fn = make_review_repo_tool(code_review_agent)
-    tool_fn.__name__ = "review_repo_tool"
+
+    review_repo_tool = make_review_repo_tool(code_review_agent)
+    review_repo_tool.__name__ = "review_repo_tool"
+
+    fetch_repo_files_tool = make_fetch_repo_files_tool(code_review_agent)
+    fetch_repo_files_tool.__name__ = "fetch_repo_files_tool"
+
+    scan_code_tool = make_scan_code_tool(code_review_agent)
+    scan_code_tool.__name__ = "scan_code_tool"
+
+    generate_review_tool = make_generate_review_tool(code_review_agent)
+    generate_review_tool.__name__ = "generate_review_tool"
 
     return Agent(
         name="code_review_agent",
@@ -244,12 +396,25 @@ def build_adk_agent(
             "quality issues using static analysis and an LLM."
         ),
         instruction=(
-            "When the user asks you to review a GitHub repository, call the "
-            "review_repo_tool with the repository URL (and branch, if given). "
-            "Summarize the resulting issues for the user, prioritized by "
+            "When the user asks for a full review of a GitHub repository, call "
+            "review_repo_tool with the repository URL (and branch, if given) — "
+            "it runs fetch, scan, and review in one step and is the fastest path "
+            "for a typical request. "
+            "If the user explicitly asks for just one part of the process (e.g. "
+            "'just show me the files', 'just run static analysis', 'just review "
+            "this code I'm giving you'), instead use the individual "
+            "fetch_repo_files_tool, scan_code_tool, and generate_review_tool, "
+            "passing the files and findings returned by one tool into the next "
+            "as needed. "
+            "Always summarize the resulting issues for the user, prioritized by "
             "severity, and mention any stage_errors plainly if present."
         ),
-        tools=[FunctionTool(tool_fn)],
+        tools=[
+            FunctionTool(review_repo_tool),
+            FunctionTool(fetch_repo_files_tool),
+            FunctionTool(scan_code_tool),
+            FunctionTool(generate_review_tool),
+        ],
     )
 
 

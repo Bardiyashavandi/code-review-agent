@@ -22,7 +22,10 @@ import pytest
 from agent import (
     CodeReviewAgent,
     PipelineResult,
+    make_fetch_repo_files_tool,
+    make_generate_review_tool,
     make_review_repo_tool,
+    make_scan_code_tool,
 )
 from gemini_reviewer import GeminiRateLimitError
 from semgrep_runner import SemgrepExecutionError
@@ -39,7 +42,7 @@ def make_fetch_result(paths=("a.py", "b.py"), truncated=False) -> SimpleNamespac
 def make_scan_report(findings_count=0) -> SimpleNamespace:
     findings = [
         SimpleNamespace(path="a.py", rule_id=f"rule.{i}", severity="WARNING",
-                         line_start=1, message="m")
+                         line_start=1, line_end=1, message="m", snippet="x = 1")
         for i in range(findings_count)
     ]
     return SimpleNamespace(findings=findings, scanned=2, skipped=[], duration_s=0.1)
@@ -219,6 +222,111 @@ class TestAdkToolWrapper:
             "duration_s",
         }
         assert set(output.keys()) == expected_keys
+
+
+# ---------------------------------------------------------------------------
+# 4b. Granular single-stage entry points + their ADK tool wrappers
+# ---------------------------------------------------------------------------
+
+class TestGranularEntryPoints:
+
+    def test_fetch_files_delegates_to_fetcher(self):
+        agent, mock_fetcher, mock_semgrep, mock_reviewer = make_agent()
+
+        result = agent.fetch_files("https://github.com/owner/repo")
+
+        mock_fetcher.fetch_python_files.assert_called_once()
+        mock_semgrep.scan.assert_not_called()
+        mock_reviewer.review.assert_not_called()
+        assert result is mock_fetcher.fetch_python_files.return_value
+
+    def test_scan_files_delegates_to_semgrep(self):
+        agent, mock_fetcher, mock_semgrep, mock_reviewer = make_agent()
+
+        result = agent.scan_files([SimpleNamespace(path="a.py", content="x = 1\n")])
+
+        mock_semgrep.scan.assert_called_once()
+        mock_fetcher.fetch_python_files.assert_not_called()
+        mock_reviewer.review.assert_not_called()
+        assert result is mock_semgrep.scan.return_value
+
+    def test_generate_review_delegates_to_reviewer(self):
+        agent, mock_fetcher, mock_semgrep, mock_reviewer = make_agent()
+
+        files = [SimpleNamespace(path="a.py", content="x = 1\n")]
+        scan_report = make_scan_report()
+        result = agent.generate_review(files, scan_report)
+
+        mock_reviewer.review.assert_called_once_with(files, scan_report)
+        mock_fetcher.fetch_python_files.assert_not_called()
+        mock_semgrep.scan.assert_not_called()
+        assert result is mock_reviewer.review.return_value
+
+
+class TestGranularAdkTools:
+
+    def test_fetch_repo_files_tool_returns_json_serializable_dict(self):
+        agent, *_ = make_agent(fetch_result=make_fetch_result(paths=("a.py",)))
+        tool = make_fetch_repo_files_tool(agent)
+
+        output = tool("https://github.com/owner/repo")
+
+        json.dumps(output)
+        assert set(output.keys()) == {"repo_url", "files", "files_count", "truncated"}
+        assert output["files_count"] == 1
+
+    def test_fetch_repo_files_tool_rejects_empty_url(self):
+        agent, *_ = make_agent()
+        tool = make_fetch_repo_files_tool(agent)
+
+        with pytest.raises(ValueError, match="repo_url"):
+            tool("")
+
+    def test_scan_code_tool_returns_json_serializable_dict(self):
+        agent, *_ = make_agent(scan_result=make_scan_report(findings_count=1))
+        tool = make_scan_code_tool(agent)
+
+        output = tool([{"path": "a.py", "content": "x = 1\n"}])
+
+        json.dumps(output)
+        assert set(output.keys()) == {"findings", "scanned", "skipped"}
+        assert len(output["findings"]) == 1
+
+    def test_scan_code_tool_rejects_empty_files(self):
+        agent, *_ = make_agent()
+        tool = make_scan_code_tool(agent)
+
+        with pytest.raises(ValueError, match="files"):
+            tool([])
+
+    def test_generate_review_tool_returns_json_serializable_dict(self):
+        agent, *_ = make_agent(review_result=make_review_report(issue_count=1))
+        tool = make_generate_review_tool(agent)
+
+        output = tool(
+            [{"path": "a.py", "content": "x = 1\n"}],
+            findings=[{"path": "a.py", "rule_id": "r1", "severity": "WARNING", "message": "m"}],
+        )
+
+        json.dumps(output)
+        assert set(output.keys()) == {"issues", "summary", "model"}
+        assert len(output["issues"]) == 1
+
+    def test_generate_review_tool_works_without_findings(self):
+        agent, *_ = make_agent(review_result=make_review_report(issue_count=0))
+        tool = make_generate_review_tool(agent)
+
+        output = tool([{"path": "a.py", "content": "x = 1\n"}])
+
+        json.dumps(output)
+        assert output["issues"] == []
+
+    def test_generate_review_tool_rejects_empty_files(self):
+        agent, *_ = make_agent()
+        tool = make_generate_review_tool(agent)
+
+        with pytest.raises(ValueError, match="files"):
+            tool([])
 
 
 # ---------------------------------------------------------------------------

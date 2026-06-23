@@ -6,7 +6,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-83%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-92%20passing-brightgreen)
 ![ADK](https://img.shields.io/badge/Google%20ADK-2.0-orange)
 ![Cost](https://img.shields.io/badge/cost-%240-success)
 
@@ -133,7 +133,7 @@ for issue in result.review_report.issues:
     print(issue.severity, issue.path, issue.title)
 ```
 
-**Use it as an ADK agent** — the model decides on its own when to call the review tool:
+**Use it as an ADK agent** — the model decides on its own which tool(s) to call:
 
 ```python
 from agent import build_adk_agent
@@ -144,7 +144,16 @@ adk_agent = build_adk_agent(
 )
 ```
 
-Run `adk_agent` through any ADK `Runner` (e.g. `google.adk.runners.InMemoryRunner`) — or just run `python3 adk_demo.py` for a ready-made example. Given a prompt like *"review https://github.com/owner/repo and summarize the top issues,"* the model itself calls `review_repo_tool` — no manual function dispatch — receives the structured result, and writes a severity-prioritized summary.
+Run `adk_agent` through any ADK `Runner` (e.g. `google.adk.runners.InMemoryRunner`) — or just run `python3 adk_demo.py` for a ready-made example. The agent exposes four tools, not one:
+
+| Tool | Does |
+|---|---|
+| `review_repo_tool` | One-shot: fetch + scan + review a repo URL in a single call |
+| `fetch_repo_files_tool` | Fetch a repo's Python files only |
+| `scan_code_tool` | Run Semgrep on a given set of files only |
+| `generate_review_tool` | Ask Gemini to review a given set of files (+ optional findings) only |
+
+For a typical request like *"review https://github.com/owner/repo and summarize the top issues,"* the model calls `review_repo_tool` directly. For a narrower request — *"just show me the files in this repo"* or *"just run static analysis on this code"* — the model instead plans a multi-step call sequence using the granular tools, passing each tool's output into the next itself. Both paths were exercised and verified live in the ADK Dev UI playground.
 
 This was verified two independent ways: once via the standalone `adk_demo.py` script, and again interactively in Google's own ADK Dev UI playground (`adk web`), which loads `agent.py`'s module-level `root_agent` and lets you chat with the agent directly in a browser. Both surfaced the same correct behavior — the model deciding on its own to call `review_repo_tool` and returning an accurate, severity-ranked summary — which is stronger evidence than either check alone, since the Dev UI is Google's own tooling, not code this project wrote.
 
@@ -163,7 +172,7 @@ This was verified two independent ways: once via the standalone `adk_demo.py` sc
 pytest -v
 ```
 
-83 tests across all five modules. Every external dependency — GitHub's API, the Semgrep subprocess, the Gemini SDK — is mocked, so the suite runs in about a second with no network access or credentials.
+92 tests across all five modules. Every external dependency — GitHub's API, the Semgrep subprocess, the Gemini SDK — is mocked, so the suite runs in about a second with no network access or credentials.
 
 ## Real-world verification, not just mocks
 
