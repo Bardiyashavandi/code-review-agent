@@ -18,15 +18,12 @@ from unittest.mock import patch
 import pytest
 
 from semgrep_runner import (
-    Finding,
     ScanReport,
     SemgrepExecutionError,
     SemgrepNotInstalledError,
     SemgrepRunner,
     SemgrepTimeoutError,
-    UnsafeFilePathError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

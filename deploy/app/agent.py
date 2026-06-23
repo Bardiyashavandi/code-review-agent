@@ -27,9 +27,9 @@ from dataclasses import dataclass, field
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 
-from gemini_reviewer import GeminiReviewer, GeminiReviewerError, ReviewReport
-from github_fetcher import FetchResult, GitHubFetcher
-from semgrep_runner import ScanReport, SemgrepRunner, SemgrepRunnerError
+from .gemini_reviewer import GeminiReviewer, GeminiReviewerError, ReviewReport
+from .github_fetcher import FetchResult, GitHubFetcher
+from .semgrep_runner import ScanReport, SemgrepRunner, SemgrepRunnerError
 
 logger = logging.getLogger(__name__)
 
@@ -253,17 +253,26 @@ def build_adk_agent(
     )
 
 
-# --- Expose root_agent for the loader ---------------------------------------
+# --- Expose the app for agents-cli playground -------------------------------
 import os
-from dotenv import load_dotenv
 
-# Ensure environment variables are loaded and override any invalid/expired shell values
+from dotenv import load_dotenv
+from google.adk.apps import App
+
 load_dotenv(override=True)
 
+# We read token/key from env and pass to build_adk_agent
 github_token = os.environ.get("GITHUB_TOKEN", "")
 gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
 
+# Note: if they are empty, the agent will raise a ValueError when instantiated
+# but we can fallback or let it raise during runtime.
 root_agent = build_adk_agent(
     github_token=github_token,
     gemini_api_key=gemini_api_key,
+)
+
+app = App(
+    root_agent=root_agent,
+    name="app",
 )

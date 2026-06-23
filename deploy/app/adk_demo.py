@@ -18,7 +18,7 @@ from google.genai import types
 from agent import build_adk_agent
 
 PROMPT = (
-    "review https://github.com/anxolerd/dvpwa "
+    "review https://github.com/anxolerd/dvpwa (branch: master) "
     "and summarize the top issues"
 )
 

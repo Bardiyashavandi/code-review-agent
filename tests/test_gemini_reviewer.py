@@ -19,14 +19,12 @@ import pytest
 from google.genai import errors as genai_errors
 
 from gemini_reviewer import (
+    SYSTEM_INSTRUCTION,
     GeminiAuthenticationError,
     GeminiRateLimitError,
     GeminiReviewer,
-    ReviewIssue,
     ReviewReport,
-    SYSTEM_INSTRUCTION,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

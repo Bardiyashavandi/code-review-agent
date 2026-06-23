@@ -24,9 +24,8 @@ from agent import (
     PipelineResult,
     make_review_repo_tool,
 )
-from semgrep_runner import SemgrepExecutionError
 from gemini_reviewer import GeminiRateLimitError
-
+from semgrep_runner import SemgrepExecutionError
 
 # ---------------------------------------------------------------------------
 # Helpers

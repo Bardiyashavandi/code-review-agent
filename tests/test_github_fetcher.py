@@ -11,7 +11,6 @@ Run with:
 from __future__ import annotations
 
 import base64
-import json
 import time
 from unittest.mock import patch
 
@@ -20,14 +19,11 @@ import pytest
 
 from github_fetcher import (
     AuthenticationError,
-    FileResult,
-    FetchResult,
     GitHubAPIError,
     GitHubFetcher,
     RateLimitError,
     RepoNotFoundError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
