@@ -11,15 +11,21 @@ Run it directly:
 import asyncio
 import os
 
+from dotenv import load_dotenv
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from agent import build_adk_agent
 
-PROMPT = "review https://github.com/anxolerd/dvpwa and summarize the top issues"
+PROMPT = (
+    "review https://github.com/anxolerd/dvpwa (branch: master) "
+    "and summarize the top issues"
+)
 
 
 async def main() -> None:
+    load_dotenv()  # loads .env into os.environ if present; does not override existing env vars
+
     adk_agent = build_adk_agent(
         github_token=os.environ["GITHUB_TOKEN"],
         gemini_api_key=os.environ["GEMINI_API_KEY"],
