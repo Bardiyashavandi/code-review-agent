@@ -72,25 +72,24 @@ Only a fetch failure is treated as fatal — there's nothing to review without f
 
 ### The agent's tool graph
 
-`agent.py` doesn't just run that pipeline once — it exposes **eight separate tools** to the ADK agent, so the model plans its own path through them instead of always running the whole thing:
+`agent.py` doesn't just run that pipeline once — it exposes **eight separate tools** to the ADK agent, all as flat siblings under the agent, so the model plans its own path through them instead of always running the whole thing:
 
 ```
-                              ┌─────────────────────┐
-                              │   code_review_agent  │
-                              └──────────┬───────────┘
-              ┌───────────────┬──────────┼──────────┬───────────────┐
-              │               │          │          │               │
-       review_repo_tool  fetch_repo_  scan_code_ generate_  get_repo_metadata_
-       (one-shot:        files_tool   tool       review_tool tool
-        fetch+scan+                                          (lightweight repo
-        review)                                               check, no fetch)
-              │               │          │          │               │
-      ┌───────┴───────┐       │          │          │       ┌───────┴────────┐
-      │               │       │          │          │       │                │
-search_code_in_   explain_finding_                       generate_report_
-files_tool        tool                                   file_tool
-(grep across       (deep-dive on                          (save review to
-fetched files)      one issue)                             a real .md file)
+                              code_review_agent
+                                     |
+   +---------------+---------------+----------------+----------------+
+   |               |               |                |                |
+review_repo_   fetch_repo_     scan_code_      generate_       get_repo_
+tool           files_tool      tool            review_tool     metadata_tool
+(one-shot:     (fetch only)    (Semgrep        (Gemini review  (language/size/
+ fetch+scan+                    only)           only)           stars, no fetch)
+ review)
+
+   |               |               |
+search_code_   explain_         generate_
+in_files_tool  finding_tool     report_file_tool
+(grep fetched  (deep-dive on    (save review as
+ files)         one issue)       a real .md file)
 ```
 
 A one-line request like *"review this repo"* collapses to a single tool call. A narrower request — *"just show me the files,"* *"find every place using eval,"* *"explain that issue further,"* *"save this as a file"* — makes the model pick (and chain) the right tool(s) itself, which is the actual point of using an agent framework instead of one big function.
